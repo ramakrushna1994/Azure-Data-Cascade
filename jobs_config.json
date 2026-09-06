@@ -24,6 +24,8 @@
         "data_security_mode": "SINGLE_USER",
         "spark_env_vars": {
           "CASCADE_CONFIG": "/Workspace/Shared/cascade/config.yaml",
+          "ADLS_ACCOUNT": "<your-adls-account>",
+          "ADLS_CONTAINER": "<your-container>",
           "CONFLUENT_BOOTSTRAP": "{{secrets/cascade/confluent_bootstrap}}",
           "CONFLUENT_API_KEY": "{{secrets/cascade/confluent_api_key}}",
           "CONFLUENT_API_SECRET": "{{secrets/cascade/confluent_api_secret}}"

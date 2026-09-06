@@ -148,8 +148,15 @@ cannot run it.
 
 ### 6. Run
 
+`jobs_config.json` ships with placeholders so no environment detail is committed.
+Substitute them at deploy time:
+
 ```bash
-databricks jobs create --json @jobs_config.json
+sed -e "s|<your-adls-account>|$ADLS_ACCOUNT|" \
+    -e "s|<your-container>|$ADLS_CONTAINER|" \
+    jobs_config.json > /tmp/job.json
+
+databricks jobs create --json @/tmp/job.json
 databricks jobs run-now <job-id>
 ```
 
