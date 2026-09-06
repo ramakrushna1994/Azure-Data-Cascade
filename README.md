@@ -148,8 +148,16 @@ cannot run it.
 
 ### 6. Run
 
-`jobs_config.json` ships with placeholders so no environment detail is committed.
-Substitute them at deploy time:
+`config.yaml` and `jobs_config.json` carry `${ADLS_ACCOUNT}` / `<your-adls-account>`
+placeholders so no environment detail is committed. Your real values live in `.env`,
+which is gitignored:
+
+```bash
+cp .env.example .env     # then fill in your values
+set -a; . ./.env; set +a
+```
+
+Substitute them at deploy time and create the job:
 
 ```bash
 sed -e "s|<your-adls-account>|$ADLS_ACCOUNT|" \
@@ -159,6 +167,11 @@ sed -e "s|<your-adls-account>|$ADLS_ACCOUNT|" \
 databricks jobs create --json @/tmp/job.json
 databricks jobs run-now <job-id>
 ```
+
+The job stores `ADLS_ACCOUNT` and `ADLS_CONTAINER` as cluster environment variables,
+and `pipeline_config` expands them into the `abfss://` paths at runtime. Note these are
+**not credentials** — access is granted by the Unity Catalog external location and its
+Access Connector managed identity, so the account name alone grants nobody anything.
 
 The job has **no schedule** — it runs when you trigger it, or from an external
 orchestrator. Nothing starts a cluster on a timer.
