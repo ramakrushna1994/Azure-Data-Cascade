@@ -17,12 +17,12 @@ databricks:
     analytics: "analytics"
 
   # All three paths sit under the `cascade_root` external location
-  # (abfss://data@adbramdata01.dfs.core.windows.net/adb/cascade), which is
+  # (abfss://${ADLS_CONTAINER}@${ADLS_ACCOUNT}.dfs.core.windows.net/adb/cascade), which is
   # backed by the sc_catalog_storage credential. Access is via the Access
   # Connector managed identity - there is no account key anywhere.
-  storage_root: "abfss://data@adbramdata01.dfs.core.windows.net/adb/cascade"
-  checkpoint_path: "abfss://data@adbramdata01.dfs.core.windows.net/adb/cascade/checkpoints"
-  landing_path: "abfss://data@adbramdata01.dfs.core.windows.net/adb/cascade/raw"
+  storage_root: "abfss://${ADLS_CONTAINER}@${ADLS_ACCOUNT}.dfs.core.windows.net/adb/cascade"
+  checkpoint_path: "abfss://${ADLS_CONTAINER}@${ADLS_ACCOUNT}.dfs.core.windows.net/adb/cascade/checkpoints"
+  landing_path: "abfss://${ADLS_CONTAINER}@${ADLS_ACCOUNT}.dfs.core.windows.net/adb/cascade/raw"
 
 # Confluent Cloud (Basic tier)
 kafka:
