@@ -249,7 +249,33 @@ DESCRIBE HISTORY cascade.silver_layer.silver_orders;
 RESTORE TABLE cascade.silver_layer.silver_orders VERSION AS OF <n>;
 ```
 
-## Local testing
+## Tests
+
+```bash
+pytest tests/ -q          # 33 tests
+```
+
+Two groups. `test_pipeline_config.py` needs no Spark and runs in under a second —
+placeholder expansion, `require()` rejecting unexpanded `${VAR}`, three-part table names,
+and checkpoint/schema paths not colliding. `test_transforms.py` uses a local
+SparkSession and covers the Silver logic: uppercase status passing validation,
+unparseable dates quarantining rather than becoming NULL, each failure mode getting its
+own `error_message`, deduplication keeping the newest row per key, and `order_timestamp`
+being carried through for the hourly rollup.
+
+The pure transforms live in `transforms.py` rather than inside `silver_layer.py`,
+because a notebook executes its run cells on import and so cannot be imported by a test.
+
+**Python 3.11 or 3.12.** PySpark 3.5 does not support 3.13+ — on 3.14 it fails with
+`PicklingError` from cloudpickle. Databricks Runtime 16.4 uses Python 3.12. A JRE is also
+required (Java 17 works). The transform tests skip automatically if pyspark is absent, so
+the config tests still run anywhere.
+
+```bash
+py -3.11 -m venv .venv && .venv/Scripts/pip install -r requirements.txt
+```
+
+## Sending test data
 
 ```bash
 pip install -r requirements.txt
