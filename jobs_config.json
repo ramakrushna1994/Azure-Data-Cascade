@@ -1,0 +1,124 @@
+{
+  "name": "cascade-pipeline",
+  "description": "Bronze -> Silver -> Gold medallion pipeline with quality checks and monitoring.",
+  "max_concurrent_runs": 1,
+  "job_clusters": [
+    {
+      "job_cluster_key": "cascade_shared",
+      "new_cluster": {
+        "spark_version": "16.4.x-scala2.12",
+        "node_type_id": "Standard_D2ads_v6",
+        "num_workers": 0,
+        "spark_conf": {
+          "spark.master": "local[*, 4]",
+          "spark.databricks.cluster.profile": "singleNode"
+        },
+        "custom_tags": {
+          "ResourceClass": "SingleNode",
+          "project": "data-cascade"
+        },
+        "azure_attributes": {
+          "availability": "ON_DEMAND_AZURE",
+          "first_on_demand": 1
+        },
+        "data_security_mode": "SINGLE_USER",
+        "spark_env_vars": {
+          "CASCADE_CONFIG": "/Workspace/Shared/cascade/config.yaml",
+          "CONFLUENT_BOOTSTRAP": "{{secrets/cascade/confluent_bootstrap}}",
+          "CONFLUENT_API_KEY": "{{secrets/cascade/confluent_api_key}}",
+          "CONFLUENT_API_SECRET": "{{secrets/cascade/confluent_api_secret}}"
+        }
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "task_key": "bronze_setup",
+      "description": "Create Bronze tables and log ingestion metrics.",
+      "job_cluster_key": "cascade_shared",
+      "notebook_task": {
+        "notebook_path": "/Shared/cascade/bronze_layer",
+        "source": "WORKSPACE"
+      },
+      "timeout_seconds": 900
+    },
+    {
+      "task_key": "kafka_ingest",
+      "description": "Drain the Confluent topic into Bronze. trigger(availableNow) so the task finishes.",
+      "depends_on": [
+        {
+          "task_key": "bronze_setup"
+        }
+      ],
+      "job_cluster_key": "cascade_shared",
+      "notebook_task": {
+        "notebook_path": "/Shared/cascade/kafka_consumer",
+        "source": "WORKSPACE"
+      },
+      "timeout_seconds": 1800
+    },
+    {
+      "task_key": "silver_transform",
+      "description": "Normalize, validate, deduplicate, SCD Type 2 merge into Silver.",
+      "depends_on": [
+        {
+          "task_key": "kafka_ingest"
+        }
+      ],
+      "job_cluster_key": "cascade_shared",
+      "notebook_task": {
+        "notebook_path": "/Shared/cascade/silver_layer",
+        "source": "WORKSPACE"
+      },
+      "timeout_seconds": 1800
+    },
+    {
+      "task_key": "gold_aggregate",
+      "description": "Rebuild Gold aggregates, date dimension, and analytics views.",
+      "depends_on": [
+        {
+          "task_key": "silver_transform"
+        }
+      ],
+      "job_cluster_key": "cascade_shared",
+      "notebook_task": {
+        "notebook_path": "/Shared/cascade/gold_layer",
+        "source": "WORKSPACE"
+      },
+      "timeout_seconds": 1800
+    },
+    {
+      "task_key": "quality_checks",
+      "description": "Run configured quality rules. Fails the run when a rule fails.",
+      "depends_on": [
+        {
+          "task_key": "gold_aggregate"
+        }
+      ],
+      "job_cluster_key": "cascade_shared",
+      "notebook_task": {
+        "notebook_path": "/Shared/cascade/quality_checks",
+        "source": "WORKSPACE"
+      },
+      "timeout_seconds": 900
+    },
+    {
+      "task_key": "monitoring",
+      "description": "Freshness SLAs and processing lag. Runs even if quality fails.",
+      "depends_on": [
+        {
+          "task_key": "gold_aggregate"
+        }
+      ],
+      "job_cluster_key": "cascade_shared",
+      "notebook_task": {
+        "notebook_path": "/Shared/cascade/monitoring",
+        "source": "WORKSPACE"
+      },
+      "timeout_seconds": 900
+    }
+  ],
+  "queue": {
+    "enabled": true
+  }
+}
