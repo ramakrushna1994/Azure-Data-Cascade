@@ -15,8 +15,8 @@ Two things this module exists to fix:
    placeholder was left unexpanded rather than letting it reach a broker.
 
 On Databricks, job tasks inject secrets as cluster environment variables via
-``{{secrets/scope/key}}`` - see jobs_config.json. Locally, export them or use
-a .env file.
+``{{secrets/scope/key}}`` - see jobs_config.json. Locally, values come from
+.env, loaded by ``_load_dotenv_once()`` below.
 """
 
 import logging
@@ -29,6 +29,35 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_PATH = "config.yaml"
 _cache: Optional[Dict[str, Any]] = None
+_dotenv_loaded = False
+
+
+def _load_dotenv_once() -> None:
+    """Load .env for local runs, if python-dotenv is installed and .env exists.
+
+    This is a local-development convenience and a no-op on Databricks: there is
+    no .env on a cluster, and python-dotenv is not installed there either.
+
+    Real environment variables always win - ``load_dotenv`` does not override
+    them by default - so the Databricks job's spark_env_vars take precedence
+    even in the impossible case that a .env were present.
+    """
+    global _dotenv_loaded
+    if _dotenv_loaded:
+        return
+    _dotenv_loaded = True
+
+    try:
+        from dotenv import find_dotenv, load_dotenv
+    except ImportError:
+        return
+
+    # usecwd=True searches upward from the working directory. The default
+    # resolves relative to *this* module's directory, which would find the
+    # repo's own .env regardless of where the process was started.
+    path = find_dotenv(usecwd=True)
+    if path and load_dotenv(path):
+        logger.info(f"Loaded local .env from {path}")
 
 
 def _expand(value: Any) -> Any:
@@ -51,6 +80,7 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
     """
     global _cache
     if _cache is None:
+        _load_dotenv_once()
         resolved = path or os.environ.get("CASCADE_CONFIG", _DEFAULT_PATH)
         with open(resolved) as f:
             _cache = _expand(yaml.safe_load(f))
@@ -59,9 +89,10 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
 
 
 def reset_cache() -> None:
-    """Drop the cached config. Only needed in tests."""
-    global _cache
+    """Drop the cached config and the .env-loaded flag. Only needed in tests."""
+    global _cache, _dotenv_loaded
     _cache = None
+    _dotenv_loaded = False
 
 
 def require(value: str, name: str) -> str:
