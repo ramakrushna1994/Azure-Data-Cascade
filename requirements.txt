@@ -1,0 +1,22 @@
+# Local development only. Databricks Runtime 16.4 LTS already provides pyspark,
+# requests, and pyyaml on the cluster - nothing here is installed by the job.
+
+# Config loading, shared by every module.
+pyyaml>=6.0
+
+# kafka_producer.py only. kafka-python is effectively unmaintained; -ng is the
+# maintained fork and is API-compatible.
+kafka-python-ng>=2.2.0
+
+# api_ingestion.py. Also pulls in urllib3, used for its retry strategy.
+requests>=2.31.0
+
+# Needed only to run or test the pipeline modules off-cluster. Match the
+# Databricks Runtime: 16.4 LTS ships Spark 3.5.2.
+pyspark>=3.5.0
+
+# The Databricks CLI is no longer a pip package. Install the standalone binary:
+#   winget install Databricks.DatabricksCLI      (Windows)
+#   brew install databricks/tap/databricks       (macOS)
+# The old `databricks-cli` PyPI package (<=0.18) is deprecated and its command
+# syntax is incompatible with the commands used in DEPLOYMENT.md.
