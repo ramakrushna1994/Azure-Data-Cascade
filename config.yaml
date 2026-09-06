@@ -1,0 +1,111 @@
+# data-cascade pipeline configuration
+#
+# ${VAR} placeholders are expanded from the environment by pipeline_config.py.
+# On Databricks the job tasks inject them from the `cascade` secret scope via
+# spark_env_vars - see jobs_config.json. Nothing secret belongs in this file.
+
+databricks:
+  # Unity Catalog. Created 2026-09-06; the metastore has no `main` catalog,
+  # which is why every table name is built from this value.
+  catalog: "cascade"
+
+  schemas:
+    bronze: "bronze_layer"
+    silver: "silver_layer"
+    gold: "gold_layer"
+    monitoring: "monitoring"
+    analytics: "analytics"
+
+  # All three paths sit under the `cascade_root` external location
+  # (abfss://data@adbramdata01.dfs.core.windows.net/adb/cascade), which is
+  # backed by the sc_catalog_storage credential. Access is via the Access
+  # Connector managed identity - there is no account key anywhere.
+  storage_root: "abfss://data@adbramdata01.dfs.core.windows.net/adb/cascade"
+  checkpoint_path: "abfss://data@adbramdata01.dfs.core.windows.net/adb/cascade/checkpoints"
+  landing_path: "abfss://data@adbramdata01.dfs.core.windows.net/adb/cascade/raw"
+
+# Confluent Cloud (Basic tier)
+kafka:
+  bootstrap_servers: "${CONFLUENT_BOOTSTRAP}"
+  security_protocol: "SASL_SSL"
+  sasl_mechanism: "PLAIN"
+  sasl_plain_username: "${CONFLUENT_API_KEY}"
+  sasl_plain_password: "${CONFLUENT_API_SECRET}"
+
+  topics:
+    orders: "order-stream"
+
+  consumer_group: "cascade-pipeline"
+  # Applies on first run only; after that the checkpoint decides the offset.
+  starting_offsets: "earliest"
+
+# REST API polling
+api:
+  endpoints:
+    - name: "orders"
+      url: "https://api.example.com/orders"
+      method: "GET"
+      # Named explicitly: deriving it from `name` previously produced
+      # bronze_external_orders_api, which nothing downstream read.
+      table: "bronze_orders_api"
+      headers:
+        Authorization: "Bearer ${API_KEY}"
+
+# File ingestion via Auto Loader. Paths are relative to databricks.landing_path.
+files:
+  paths:
+    - pattern: "orders"
+      table: "bronze_orders_files"
+      format: "csv"
+
+# Data quality rules, read by quality_checks.py
+quality:
+  rules:
+    - table: "silver_orders"
+      # SCD Type 2 keeps historical versions, so uniqueness and freshness
+      # checks only make sense against current rows.
+      current_only: true
+      checks:
+        - column: "order_id"
+          check: "unique"
+        - column: "order_id"
+          check: "not_null"
+          threshold: 0.0
+        - column: "user_id"
+          check: "not_null"
+          threshold: 0.01
+        - column: "amount"
+          check: "range"
+          min: 0
+          max: 1000000
+
+    - table: "gold_orders_daily"
+      layer: "gold"
+      checks:
+        - column: "total_revenue"
+          check: "range"
+          min: 0
+        - column: "processing_timestamp"
+          check: "freshness"
+          max_age_hours: 2
+
+# SLA monitoring, read by monitoring.py
+monitoring:
+  slack_webhook: "${SLACK_WEBHOOK}"
+
+  slas:
+    - table: "bronze_orders_kafka"
+      layer: "bronze"
+      timestamp_column: "_bronze_ingestion_date"
+      max_age_minutes: 15
+    - table: "silver_orders"
+      layer: "silver"
+      timestamp_column: "_silver_processing_time"
+      max_age_minutes: 30
+    - table: "gold_orders_daily"
+      layer: "gold"
+      timestamp_column: "processing_timestamp"
+      max_age_minutes: 90
+
+  metrics_table: "pipeline_metrics"
+  quality_results_table: "quality_check_results"
