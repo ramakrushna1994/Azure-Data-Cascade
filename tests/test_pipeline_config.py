@@ -47,8 +47,16 @@ def config_file(tmp_path):
 
 @pytest.fixture(autouse=True)
 def _clean_cache():
-    """load_config caches; every test must start from a clean slate."""
+    """load_config caches; every test must start from a clean slate.
+
+    Also suppresses .env loading. The repo root contains a real .env for local
+    development, and load_dotenv() would inject those values into tests that
+    assert on *unset* variables - making the suite pass or fail depending on
+    whether a developer happens to have a .env. Tests set what they need via
+    monkeypatch instead.
+    """
     cfg.reset_cache()
+    cfg._dotenv_loaded = True
     yield
     cfg.reset_cache()
 
@@ -185,3 +193,45 @@ def test_config_is_cached_after_first_load(config_file):
     # A path that does not exist would raise if it were re-read.
     second = cfg.load_config("/nonexistent/config.yaml")
     assert first is second
+
+
+# --- .env loading ----------------------------------------------------------
+
+
+def test_dotenv_supplies_values_for_local_runs(tmp_path, monkeypatch, config_file):
+    """Locally, .env should populate placeholders without an explicit export."""
+    pytest.importorskip("dotenv", reason="python-dotenv not installed")
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("CONFLUENT_BOOTSTRAP=from-dotenv:9092\n")
+    monkeypatch.delenv("CONFLUENT_BOOTSTRAP", raising=False)
+
+    cfg.reset_cache()  # re-enable dotenv loading, which the autouse fixture suppresses
+    loaded = cfg.load_config(config_file)
+
+    assert loaded["kafka"]["bootstrap_servers"] == "from-dotenv:9092"
+
+
+def test_real_environment_beats_dotenv(tmp_path, monkeypatch, config_file):
+    """A Databricks job's spark_env_vars must never be overridden by a .env."""
+    pytest.importorskip("dotenv", reason="python-dotenv not installed")
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("CONFLUENT_BOOTSTRAP=from-dotenv:9092\n")
+    monkeypatch.setenv("CONFLUENT_BOOTSTRAP", "from-real-env:9092")
+
+    cfg.reset_cache()
+    loaded = cfg.load_config(config_file)
+
+    assert loaded["kafka"]["bootstrap_servers"] == "from-real-env:9092"
+
+
+def test_missing_dotenv_is_not_an_error(tmp_path, monkeypatch, config_file):
+    """No .env (the situation on every Databricks cluster) must load cleanly."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CONFLUENT_BOOTSTRAP", "from-real-env:9092")
+
+    cfg.reset_cache()
+    loaded = cfg.load_config(config_file)
+
+    assert loaded["kafka"]["bootstrap_servers"] == "from-real-env:9092"

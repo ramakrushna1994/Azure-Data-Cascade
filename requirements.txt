@@ -4,6 +4,11 @@
 # Config loading, shared by every module.
 pyyaml>=6.0
 
+# Local-development convenience: pipeline_config loads .env if present.
+# Not installed on Databricks, where the job supplies these as cluster
+# environment variables - the import is guarded, so its absence is fine.
+python-dotenv>=1.0
+
 # kafka_producer.py only. kafka-python is effectively unmaintained; -ng is the
 # maintained fork and is API-compatible.
 kafka-python-ng>=2.2.0

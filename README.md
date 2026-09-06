@@ -154,12 +154,19 @@ which is gitignored:
 
 ```bash
 cp .env.example .env     # then fill in your values
-set -a; . ./.env; set +a
 ```
 
-Substitute them at deploy time and create the job:
+`pipeline_config` loads `.env` automatically for local runs (tests,
+`kafka_producer.py`). Deploying is a shell step, so export it there:
 
 ```bash
+set -a; . ./.env; set +a
+
+# Fail loudly rather than substituting an empty string and producing
+# an invalid abfss:// path that only breaks at runtime.
+: "${ADLS_ACCOUNT:?set ADLS_ACCOUNT in .env}"
+: "${ADLS_CONTAINER:?set ADLS_CONTAINER in .env}"
+
 sed -e "s|<your-adls-account>|$ADLS_ACCOUNT|" \
     -e "s|<your-container>|$ADLS_CONTAINER|" \
     jobs_config.json > /tmp/job.json
