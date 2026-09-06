@@ -80,3 +80,8 @@ api-key-*.txt
 client.properties
 
 .databricks
+
+# Databricks VS Code extension artifacts (regenerated locally, workspace-specific)
+databricks.yml
+pyproject.toml
+uv.lock
