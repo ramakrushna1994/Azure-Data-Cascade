@@ -20,3 +20,7 @@ pyspark>=3.5.0
 #   brew install databricks/tap/databricks       (macOS)
 # The old `databricks-cli` PyPI package (<=0.18) is deprecated and its command
 # syntax is incompatible with the commands used in DEPLOYMENT.md.
+
+# Test suite. `pytest tests/` runs the pipeline_config tests with no Spark;
+# the transform tests need pyspark (and a JRE) and skip automatically without it.
+pytest>=8.0
